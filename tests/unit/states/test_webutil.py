@@ -5,10 +5,12 @@
 
 # Import Python Libs
 from __future__ import absolute_import, print_function, unicode_literals
+import os
 
 # Import Salt Testing Libs
 from tests.support.mixins import LoaderModuleMockMixin
 from tests.support.unit import TestCase
+from tests.support.helpers import with_tempdir
 from tests.support.mock import (
     MagicMock,
     patch,
@@ -31,8 +33,11 @@ class HtpasswdTestCase(TestCase, LoaderModuleMockMixin):
         '''
 
         mock = MagicMock(return_value={'retcode': 0})
+        mock_file_exists = MagicMock(return_value={'retcode': 1})
 
-        with patch.dict(htpasswd.__salt__, {'file.grep': mock}):
+        with patch.dict(htpasswd.__salt__,
+                        {'file.grep': mock,
+                         'file.file_exists': mock_file_exists}):
             ret = htpasswd.user_exists('larry', 'badpass',
                                        '/etc/httpd/htpasswd')
             expected = {'name': 'larry',
@@ -46,12 +51,14 @@ class HtpasswdTestCase(TestCase, LoaderModuleMockMixin):
         Test if it returns True when new user is added to htpasswd file
         '''
 
+        mock_file_exists = MagicMock(return_value={'retcode': 1})
         mock_grep = MagicMock(return_value={'retcode': 1})
         mock_useradd = MagicMock(return_value={'retcode': 0,
                                                'stderr': 'Success'})
 
         with patch.dict(htpasswd.__salt__,
                         {'file.grep': mock_grep,
+                         'file.file_exists': mock_file_exists,
                          'webutil.useradd': mock_useradd}):
             ret = htpasswd.user_exists('larry', 'badpass',
                                        '/etc/httpd/htpasswd')
@@ -66,12 +73,14 @@ class HtpasswdTestCase(TestCase, LoaderModuleMockMixin):
         Test if it returns False when adding user to htpasswd failed
         '''
 
+        mock_file_exists = MagicMock(return_value={'retcode': 1})
         mock_grep = MagicMock(return_value={'retcode': 1})
         mock_useradd = MagicMock(return_value={'retcode': 1,
                                                'stderr': 'Error'})
 
         with patch.dict(htpasswd.__salt__,
                         {'file.grep': mock_grep,
+                         'file.file_exists': mock_file_exists,
                          'webutil.useradd': mock_useradd}):
             ret = htpasswd.user_exists('larry', 'badpass',
                                        '/etc/httpd/htpasswd')
@@ -79,4 +88,30 @@ class HtpasswdTestCase(TestCase, LoaderModuleMockMixin):
                         'result': False,
                         'comment': 'Error',
                         'changes': {}}
+            self.assertEqual(ret, expected)
+
+    @with_tempdir()
+    def test_no_htpasswd_file_and_user_doesnt_exist(self, base_dir):
+        '''
+        Test if .htpasswd does not exist, it returns that the user does not
+        exist as opposed to erroring out
+        '''
+        htpasswd_file = os.path.join(base_dir, '.htpasswd')
+        self.assertFalse(os.path.isfile(htpasswd_file))
+
+        mock_file_exists = MagicMock(return_value={'retcode': 1})
+        mock_grep = MagicMock(return_value={'retcode': 1})
+        mock_useradd = MagicMock(return_value={'retcode': 0,
+                                               'stderr': 'Success'})
+
+        with patch.dict(htpasswd.__salt__,
+                        {'file.grep': mock_grep,
+                         'file.file_exists': mock_file_exists,
+                         'webutil.useradd': mock_useradd}):
+            ret = htpasswd.user_exists('larry', 'badpass',
+                                       '/etc/httpd/htpasswd')
+            expected = {'name': 'larry',
+                        'result': True,
+                        'comment': 'Success',
+                        'changes': {'larry': True}}
             self.assertEqual(ret, expected)
