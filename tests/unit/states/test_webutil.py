@@ -11,6 +11,7 @@ import os
 # Import Salt Libs
 import salt.states.webutil as htpasswd
 from tests.support.helpers import with_tempdir
+
 # Import Salt Testing Libs
 from tests.support.mixins import LoaderModuleMockMixin
 from tests.support.mock import MagicMock, patch
