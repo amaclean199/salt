@@ -69,9 +69,10 @@ def user_exists(
     """
     ret = {"name": name, "changes": {}, "comment": "", "result": None}
 
-    if __salt__['file.file_exists'](htpasswd_file):
-        exists = __salt__['file.grep'](
-            htpasswd_file, '^{0}:'.format(name))['retcode'] == 0
+    if __salt__["file.file_exists"](htpasswd_file):
+        exists = (
+            __salt__["file.grep"](htpasswd_file, "^{0}:".format(name))["retcode"] == 0
+        )
     else:
         exists = False
 
