@@ -5,16 +5,16 @@
 
 # Import Python Libs
 from __future__ import absolute_import, print_function, unicode_literals
+
 import os
 
 # Import Salt Libs
 import salt.states.webutil as htpasswd
-
+from tests.support.helpers import with_tempdir
 # Import Salt Testing Libs
 from tests.support.mixins import LoaderModuleMockMixin
 from tests.support.mock import MagicMock, patch
 from tests.support.unit import TestCase
-from tests.support.helpers import with_tempdir
 
 
 class HtpasswdTestCase(TestCase, LoaderModuleMockMixin):
