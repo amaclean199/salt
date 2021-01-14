@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Apache Libcloud Storage State
 =============================
@@ -64,23 +63,16 @@ This example will download the file from the remote cloud and keep it locally
 :depends: apache-libcloud
 """
 
-# Import Python Libs
-from __future__ import absolute_import, print_function, unicode_literals
 
 import logging
-
-# Import salt libs
-import salt.utils.compat
 
 log = logging.getLogger(__name__)
 
 
 def __virtual__():
-    return True
-
-
-def __init__(opts):
-    salt.utils.compat.pack_dunder(__name__)
+    if "libcloud_storage.list_containers" in __salt__:
+        return True
+    return (False, "libcloud_storage module could not be loaded")
 
 
 def state_result(result, message, name, changes):

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Control the OpenBSD packet filter (PF).
 
@@ -7,13 +6,10 @@ Control the OpenBSD packet filter (PF).
 .. versionadded:: 2019.2.0
 """
 
-from __future__ import absolute_import, print_function, unicode_literals
 
-# Import python libs
 import logging
 import re
 
-# Import salt libs
 import salt.utils.path
 from salt.exceptions import CommandExecutionError, SaltInvocationError
 
@@ -22,15 +18,17 @@ log = logging.getLogger(__name__)
 
 def __virtual__():
     """
-    Only works on OpenBSD for now; other systems with pf (macOS, FreeBSD, etc)
-    need to be tested before enabling them.
+    Only works on OpenBSD and FreeBSD for now; other systems with pf (macOS,
+    FreeBSD, etc) need to be tested before enabling them.
     """
-    if __grains__["os"] == "OpenBSD" and salt.utils.path.which("pfctl"):
+    tested_oses = ["FreeBSD", "OpenBSD"]
+    if __grains__["os"] in tested_oses and salt.utils.path.which("pfctl"):
         return True
 
     return (
         False,
-        "The pf execution module cannot be loaded: either the system is not OpenBSD or the pfctl binary was not found",
+        "The pf execution module cannot be loaded: either the OS ({}) is not "
+        "tested or the pfctl binary was not found".format(__grains__["os"]),
     )
 
 
@@ -102,7 +100,7 @@ def loglevel(level):
 
     level:
         Log level. Should be one of the following: emerg, alert, crit, err, warning, notice,
-        info or debug.
+        info or debug (OpenBSD); or none, urgent, misc, loud (FreeBSD).
 
     CLI example:
 
@@ -114,12 +112,25 @@ def loglevel(level):
     # always made a change.
     ret = {"changes": True}
 
-    all_levels = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"]
+    myos = __grains__["os"]
+    if myos == "FreeBSD":
+        all_levels = ["none", "urgent", "misc", "loud"]
+    else:
+        all_levels = [
+            "emerg",
+            "alert",
+            "crit",
+            "err",
+            "warning",
+            "notice",
+            "info",
+            "debug",
+        ]
     if level not in all_levels:
-        raise SaltInvocationError("Unknown loglevel: {0}".format(level))
+        raise SaltInvocationError("Unknown loglevel: {}".format(level))
 
     result = __salt__["cmd.run_all"](
-        "pfctl -x {0}".format(level), output_loglevel="trace", python_shell=False
+        "pfctl -x {}".format(level), output_loglevel="trace", python_shell=False
     )
 
     if result["retcode"] != 0:
@@ -160,7 +171,7 @@ def load(file="/etc/pf.conf", noop=False):
 
     if result["retcode"] != 0:
         raise CommandExecutionError(
-            "Problem loading the ruleset from {0}".format(file),
+            "Problem loading the ruleset from {}".format(file),
             info={"errors": [result["stderr"]], "changes": False},
         )
 
@@ -203,9 +214,9 @@ def flush(modifier):
         modifier = modifier.title()
 
     if modifier not in all_modifiers:
-        raise SaltInvocationError("Unknown modifier: {0}".format(modifier))
+        raise SaltInvocationError("Unknown modifier: {}".format(modifier))
 
-    cmd = "pfctl -v -F {0}".format(modifier)
+    cmd = "pfctl -v -F {}".format(modifier)
     result = __salt__["cmd.run_all"](cmd, output_loglevel="trace", python_shell=False)
 
     if result["retcode"] == 0:
@@ -217,7 +228,7 @@ def flush(modifier):
         ret["comment"] = result["stderr"]
     else:
         raise CommandExecutionError(
-            "Could not flush {0}".format(modifier),
+            "Could not flush {}".format(modifier),
             info={"errors": [result["stderr"]], "changes": False},
         )
 
@@ -268,7 +279,7 @@ def table(command, table, **kwargs):
         "zero",
     ]
     if command not in all_commands:
-        raise SaltInvocationError("Unknown table command: {0}".format(command))
+        raise SaltInvocationError("Unknown table command: {}".format(command))
 
     cmd = ["pfctl", "-t", table, "-T", command]
 
@@ -305,7 +316,7 @@ def table(command, table, **kwargs):
             ret = {"comment": result["stderr"], "matches": False}
         else:
             raise CommandExecutionError(
-                "Could not apply {0} on table {1}".format(command, table),
+                "Could not apply {} on table {}".format(command, table),
                 info={"errors": [result["stderr"]], "changes": False},
             )
 
@@ -340,16 +351,16 @@ def show(modifier):
         modifier = modifier.title()
 
     if modifier not in all_modifiers:
-        raise SaltInvocationError("Unknown modifier: {0}".format(modifier))
+        raise SaltInvocationError("Unknown modifier: {}".format(modifier))
 
-    cmd = "pfctl -s {0}".format(modifier)
+    cmd = "pfctl -s {}".format(modifier)
     result = __salt__["cmd.run_all"](cmd, output_loglevel="trace", python_shell=False)
 
     if result["retcode"] == 0:
         ret["comment"] = result["stdout"].split("\n")
     else:
         raise CommandExecutionError(
-            "Could not show {0}".format(modifier),
+            "Could not show {}".format(modifier),
             info={"errors": [result["stderr"]], "changes": False},
         )
 

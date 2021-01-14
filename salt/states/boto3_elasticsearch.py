@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Manage Elasticsearch Service
 ============================
@@ -44,16 +43,11 @@ Manage Elasticsearch Service
 :depends: boto3
 """
 
-# Import Python libs
-from __future__ import absolute_import, print_function, unicode_literals
 
 import logging
 
-# Import Salt libs
 import salt.utils.json
 from salt.utils.versions import LooseVersion
-
-# Import 3rd-party libs
 
 log = logging.getLogger(__name__)
 __virtualname__ = "boto3_elasticsearch"
@@ -88,7 +82,7 @@ def _check_return_value(ret):
     """
     Helper function to check if the 'result' key of the return value has been
     properly set. This is to detect unexpected code-paths that would otherwise
-    return a 'success'-y value but not actually be succesful.
+    return a 'success'-y value but not actually be successful.
 
     :param dict ret: The returned value of a state function.
     """

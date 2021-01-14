@@ -188,7 +188,7 @@ def present(
 
         The following configuration properties can be toggled in the config parameter.
           - import (true) - try to import the pool before creating it if absent
-          - import_dirs (None) - specify additional locations to scan for devices on import (comma-seperated)
+          - import_dirs (None) - specify additional locations to scan for devices on import (comma-separated)
           - device_dir (None, SunOS=/dev/dsk, Linux=/dev) - specify device directory to prepend for none
             absolute device paths
           - force (false) - try to force the import or creation
@@ -295,12 +295,15 @@ def present(
 
     # don't do anything because this is a test
     if __opts__["test"]:
-        ret["result"] = True
         if __salt__["zpool.exists"](name):
-            ret["changes"][name] = "uptodate"
+            ret["result"] = True
+            ret["comment"] = "storage pool {0} is {1}".format(name, "uptodate")
         else:
+            ret["result"] = None
             ret["changes"][name] = "imported" if config["import"] else "created"
-        ret["comment"] = "storage pool {0} was {1}".format(name, ret["changes"][name])
+            ret["comment"] = "storage pool {0} would have been {1}".format(
+                name, ret["changes"][name]
+            )
 
     # update pool
     elif __salt__["zpool.exists"](name):

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
     :codeauthor: Mike Place (mp@saltstack.com)
 
@@ -7,22 +6,27 @@
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
 
-# Import Python libs
-from __future__ import absolute_import, print_function, unicode_literals
 
-# Import salt libs
+import logging
+
 import salt.modules.mysql as mysql
-
-# Import Salt Testing libs
 from tests.support.mixins import LoaderModuleMockMixin
 from tests.support.mock import MagicMock, call, patch
 from tests.support.unit import TestCase, skipIf
 
+log = logging.getLogger(__name__)
 NO_MYSQL = False
+NO_PyMYSQL = False
 try:
     import MySQLdb  # pylint: disable=W0611
-except Exception:  # pylint: disable=broad-except
+except ImportError:
     NO_MYSQL = True
+
+try:
+    # MySQLdb import failed, try to import PyMySQL
+    import pymysql
+except ImportError:
+    NO_PyMYSQL = True
 
 __all_privileges__ = [
     "ALTER",
@@ -69,6 +73,15 @@ __all_privileges__ = [
     "UPDATE",
     "XA_RECOVER_ADMIN",
 ]
+
+
+class MockMySQLConnect:
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def autocommit(self, *args, **kwards):
+        return True
 
 
 @skipIf(NO_MYSQL, "Install MySQL bindings before running MySQL unit tests.")
@@ -182,6 +195,30 @@ class MySQLTestCase(TestCase, LoaderModuleMockMixin):
                 password="BLUECOW",
             )
 
+        with patch.object(
+            mysql, "version", side_effect=["", "10.2.21-MariaDB", "10.2.21-MariaDB"]
+        ):
+            self._test_call(
+                mysql.user_exists,
+                {
+                    "sql": (
+                        "SELECT User,Host FROM mysql.user WHERE "
+                        "User = %(user)s AND Host = %(host)s AND "
+                        "Password = PASSWORD(%(password)s)"
+                    ),
+                    "sql_args": {
+                        "host": "localhost",
+                        "password": "new_pass",
+                        "user": "root",
+                    },
+                },
+                user="root",
+                host="localhost",
+                password="new_pass",
+                connection_user="root",
+                connection_pass="old_pass",
+            )
+
         # test_user_create_when_user_exists(self):
         # ensure we don't try to create a user when one already exists
         # mock the version of MySQL
@@ -273,6 +310,30 @@ class MySQLTestCase(TestCase, LoaderModuleMockMixin):
                     unix_socket=True,
                 )
 
+        with patch.object(mysql, "version", side_effect=["", "8.0.10", "8.0.10"]):
+            with patch.object(
+                mysql, "user_exists", MagicMock(return_value=False)
+            ), patch.object(
+                mysql,
+                "__get_auth_plugin",
+                MagicMock(return_value="mysql_native_password"),
+            ):
+                self._test_call(
+                    mysql.user_create,
+                    {
+                        "sql": "CREATE USER %(user)s@%(host)s IDENTIFIED BY %(password)s",
+                        "sql_args": {
+                            "password": "new_pass",
+                            "user": "root",
+                            "host": "localhost",
+                        },
+                    },
+                    "root",
+                    password="new_pass",
+                    connection_user="root",
+                    connection_pass="old_pass",
+                )
+
     def test_user_chpass(self):
         """
         Test changing a MySQL user password in mysql exec module
@@ -312,6 +373,32 @@ class MySQLTestCase(TestCase, LoaderModuleMockMixin):
                                 {
                                     "password": "BLUECOW",
                                     "user": "testuser",
+                                    "host": "localhost",
+                                },
+                            ),
+                            call().cursor().execute("FLUSH PRIVILEGES;"),
+                        )
+                        connect_mock.assert_has_calls(calls, any_order=True)
+
+        connect_mock = MagicMock()
+        with patch.object(mysql, "_connect", connect_mock):
+            with patch.object(mysql, "version", side_effect=["", "8.0.11", "8.0.11"]):
+                with patch.object(mysql, "user_exists", MagicMock(return_value=True)):
+                    with patch.dict(mysql.__salt__, {"config.option": MagicMock()}):
+                        mysql.user_chpass(
+                            "root",
+                            password="new_pass",
+                            connection_user="root",
+                            connection_pass="old_pass",
+                        )
+                        calls = (
+                            call()
+                            .cursor()
+                            .execute(
+                                "ALTER USER %(user)s@%(host)s IDENTIFIED BY %(password)s;",
+                                {
+                                    "password": "new_pass",
+                                    "user": "root",
                                     "host": "localhost",
                                 },
                             ),
@@ -447,7 +534,10 @@ class MySQLTestCase(TestCase, LoaderModuleMockMixin):
         mock_grants = [
             "GRANT USAGE ON *.* TO 'testuser'@'%'",
             "GRANT SELECT, INSERT, UPDATE ON `testdb`.`testtableone` TO 'testuser'@'%'",
-            "GRANT SELECT ON `testdb`.`testtabletwo` TO 'testuer'@'%'",
+            "GRANT SELECT(column1,column2) ON `testdb`.`testtableone` TO 'testuser'@'%'",
+            "GRANT SELECT(column1,column2), INSERT(column1,column2) ON `testdb`.`testtableone` TO 'testuser'@'%'",
+            "GRANT SELECT(column1,column2), UPDATE ON `testdb`.`testtableone` TO 'testuser'@'%'",
+            "GRANT SELECT ON `testdb`.`testtabletwo` TO 'testuser'@'%'",
             "GRANT SELECT ON `testdb`.`testtablethree` TO 'testuser'@'%'",
         ]
         with patch.object(mysql, "version", return_value="5.6.41"):
@@ -467,6 +557,8 @@ class MySQLTestCase(TestCase, LoaderModuleMockMixin):
         mock_grants = [
             "GRANT USAGE ON *.* TO 'testuser'@'%'",
             "GRANT SELECT, INSERT, UPDATE ON `testdb`.`testtableone` TO 'testuser'@'%'",
+            "GRANT SELECT(column1,column2) ON `testdb`.`testtableone` TO 'testuser'@'%'",
+            "GRANT SELECT(column1,column2), UPDATE ON `testdb`.`testtableone` TO 'testuser'@'%'",
             "GRANT SELECT ON `testdb`.`testtablethree` TO 'testuser'@'%'",
         ]
         with patch.object(mysql, "version", return_value="5.6.41"):
@@ -655,9 +747,58 @@ insert into test_update values ("crazy -- not comment");
                         call()
                         .cursor()
                         .execute(
-                            "{0}".format(expected_sql["sql"]), expected_sql["sql_args"]
+                            "{}".format(expected_sql["sql"]), expected_sql["sql_args"]
                         )
                     )
                 else:
-                    calls = call().cursor().execute("{0}".format(expected_sql))
+                    calls = call().cursor().execute("{}".format(expected_sql))
                 connect_mock.assert_has_calls((calls,), True)
+
+    @skipIf(
+        NO_PyMYSQL, "Install pymysql bindings before running test__connect_pymysql."
+    )
+    def test__connect_pymysql_exception(self):
+        """
+        Test the _connect function in the MySQL module
+        """
+        with patch.dict(mysql.__salt__, {"config.option": MagicMock()}):
+            with patch(
+                "MySQLdb.connect",
+                side_effect=pymysql.err.InternalError(
+                    1698, "Access denied for user 'root'@'localhost'"
+                ),
+            ):
+                ret = mysql._connect()
+                self.assertIn("mysql.error", mysql.__context__)
+                self.assertEqual(
+                    mysql.__context__["mysql.error"],
+                    "MySQL Error 1698: Access denied for user 'root'@'localhost'",
+                )
+
+    @skipIf(not NO_PyMYSQL, "With pymysql installed use test__connect_pymysql.")
+    def test__connect_mysqldb_exception(self):
+        """
+        Test the _connect function in the MySQL module
+        """
+        with patch.dict(mysql.__salt__, {"config.option": MagicMock()}):
+            with patch(
+                "MySQLdb.connect",
+                side_effect=mysql.OperationalError(
+                    1698, "Access denied for user 'root'@'localhost'"
+                ),
+            ):
+                ret = mysql._connect()
+                self.assertIn("mysql.error", mysql.__context__)
+                self.assertEqual(
+                    mysql.__context__["mysql.error"],
+                    "MySQL Error 1698: Access denied for user 'root'@'localhost'",
+                )
+
+    def test__connect_mysqldb(self):
+        """
+        Test the _connect function in the MySQL module
+        """
+        with patch.dict(mysql.__salt__, {"config.option": MagicMock()}):
+            with patch("MySQLdb.connect", return_value=MockMySQLConnect()):
+                ret = mysql._connect()
+                self.assertNotIn("mysql.error", mysql.__context__)

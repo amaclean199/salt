@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Integration tests for mac_timezone
 
@@ -10,30 +9,24 @@ Time sync do the following:
     - Set time to 'Do not sync'
 """
 
-# Import Python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
 import datetime
 
-# Import Salt libs
-import salt.utils.path
-import salt.utils.platform
-
-# Import 3rd Party libs
-from salt.ext import six
-
-# Import Salt Testing libs
 from tests.support.case import ModuleCase
-from tests.support.helpers import destructiveTest, flaky, skip_if_not_root
+from tests.support.helpers import (
+    destructiveTest,
+    flaky,
+    runs_on,
+    skip_if_binaries_missing,
+    skip_if_not_root,
+    slowTest,
+)
 from tests.support.unit import skipIf
 
 
 @skip_if_not_root
 @flaky
-@skipIf(not salt.utils.platform.is_darwin(), "Test only available on macOS")
-@skipIf(
-    not salt.utils.path.which("systemsetup"), "'systemsetup' binary not found in $PATH"
-)
+@runs_on(kernel="Darwin")
+@skip_if_binaries_missing("systemsetup")
 class MacTimezoneModuleTest(ModuleCase):
     """
     Validate the mac_timezone module
@@ -90,6 +83,7 @@ class MacTimezoneModuleTest(ModuleCase):
             "Invalid Date/Time Format: 13/12/2014",
         )
 
+    @slowTest
     def test_get_time(self):
         """
         Test timezone.get_time
@@ -147,15 +141,11 @@ class MacTimezoneModuleTest(ModuleCase):
         Test timezone.get_offset
         """
         self.assertTrue(self.run_function("timezone.set_zone", ["Pacific/Wake"]))
-        self.assertIsInstance(
-            self.run_function("timezone.get_offset"), six.string_types
-        )
+        self.assertIsInstance(self.run_function("timezone.get_offset"), (str,))
         self.assertEqual(self.run_function("timezone.get_offset"), "+1200")
 
         self.assertTrue(self.run_function("timezone.set_zone", ["America/Los_Angeles"]))
-        self.assertIsInstance(
-            self.run_function("timezone.get_offset"), six.string_types
-        )
+        self.assertIsInstance(self.run_function("timezone.get_offset"), (str,))
         self.assertEqual(self.run_function("timezone.get_offset"), "-0700")
 
     @skipIf(
@@ -169,17 +159,14 @@ class MacTimezoneModuleTest(ModuleCase):
         Test timezone.set_zonecode
         """
         self.assertTrue(self.run_function("timezone.set_zone", ["America/Los_Angeles"]))
-        self.assertIsInstance(
-            self.run_function("timezone.get_zonecode"), six.string_types
-        )
+        self.assertIsInstance(self.run_function("timezone.get_zonecode"), (str,))
         self.assertEqual(self.run_function("timezone.get_zonecode"), "PDT")
 
         self.assertTrue(self.run_function("timezone.set_zone", ["Pacific/Wake"]))
-        self.assertIsInstance(
-            self.run_function("timezone.get_zonecode"), six.string_types
-        )
+        self.assertIsInstance(self.run_function("timezone.get_zonecode"), (str,))
         self.assertEqual(self.run_function("timezone.get_zonecode"), "WAKT")
 
+    @slowTest
     def test_list_zones(self):
         """
         Test timezone.list_zones

@@ -1,20 +1,14 @@
-# -*- coding: utf-8 -*-
-
-# Import Python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
-# Import Salt libs
+import pytest
 import salt.utils.path
 import salt.utils.platform
 import salt.utils.systemd
-
-# Import Salt Testing libs
 from tests.support.case import ModuleCase
-from tests.support.helpers import destructiveTest, flaky
+from tests.support.helpers import destructiveTest, flaky, slowTest
 from tests.support.unit import skipIf
 
 
 @destructiveTest
+@pytest.mark.windows_whitelisted
 class ServiceModuleTest(ModuleCase):
     """
     Module testing the service module
@@ -55,7 +49,7 @@ class ServiceModuleTest(ModuleCase):
             salt.utils.path.which(cmd_name) is None
             and not salt.utils.platform.is_windows()
         ):
-            self.skipTest("{0} is not installed".format(cmd_name))
+            self.skipTest("{} is not installed".format(cmd_name))
 
     def tearDown(self):
         post_srv_status = self.run_function("service.status", [self.service_name])
@@ -79,6 +73,7 @@ class ServiceModuleTest(ModuleCase):
         del self.service_name
 
     @flaky
+    @slowTest
     def test_service_status_running(self):
         """
         test service.status execution module
@@ -88,6 +83,7 @@ class ServiceModuleTest(ModuleCase):
         check_service = self.run_function("service.status", [self.service_name])
         self.assertTrue(check_service)
 
+    @slowTest
     def test_service_status_dead(self):
         """
         test service.status execution module
@@ -97,12 +93,14 @@ class ServiceModuleTest(ModuleCase):
         check_service = self.run_function("service.status", [self.service_name])
         self.assertFalse(check_service)
 
+    @slowTest
     def test_service_restart(self):
         """
         test service.restart
         """
         self.assertTrue(self.run_function("service.restart", [self.service_name]))
 
+    @slowTest
     def test_service_enable(self):
         """
         test service.get_enabled and service.enable module
@@ -113,6 +111,7 @@ class ServiceModuleTest(ModuleCase):
         self.assertTrue(self.run_function("service.enable", [self.service_name]))
         self.assertIn(self.service_name, self.run_function("service.get_enabled"))
 
+    @slowTest
     def test_service_disable(self):
         """
         test service.get_disabled and service.disable module
@@ -126,6 +125,7 @@ class ServiceModuleTest(ModuleCase):
         else:
             self.assertIn(self.service_name, self.run_function("service.get_disabled"))
 
+    @slowTest
     def test_service_disable_doesnot_exist(self):
         """
         test service.get_disabled and service.disable module
@@ -169,11 +169,15 @@ class ServiceModuleTest(ModuleCase):
                 self.assertTrue("error" in disable.lower())
 
         if salt.utils.platform.is_darwin():
-            self.assertFalse(self.run_function("service.disabled", [srv_name]))
+            self.assertEqual(
+                self.run_function("service.disabled", [srv_name]),
+                "ERROR: Service not found: {}".format(srv_name),
+            )
         else:
             self.assertNotIn(srv_name, self.run_function("service.get_disabled"))
 
     @skipIf(not salt.utils.platform.is_windows(), "Windows Only Test")
+    @slowTest
     def test_service_get_service_name(self):
         """
         test service.get_service_name

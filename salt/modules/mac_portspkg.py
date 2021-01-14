@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Support for MacPorts under macOS.
 
@@ -22,7 +21,7 @@ Because of 1 and 2 it is possible to get the salt-minion into a state where
 on the master to check for potentially long-running calls to `port`.
 
 Finally, ports database updates are always handled with `port selfupdate`
-as opposed to `port sync`.  This makes sense in the MacPorts user commmunity
+as opposed to `port sync`.  This makes sense in the MacPorts user community
 but may confuse experienced Linux admins as Linux package managers
 don't upgrade the packaging software when doing a package database update.
 In other words `salt mac-machine pkg.refresh_db` is more like
@@ -30,14 +29,10 @@ In other words `salt mac-machine pkg.refresh_db` is more like
 
 """
 
-# Import python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
 import copy
 import logging
 import re
 
-# Import salt libs
 import salt.utils.data
 import salt.utils.functools
 import salt.utils.mac_utils
@@ -46,9 +41,6 @@ import salt.utils.pkg
 import salt.utils.platform
 import salt.utils.versions
 from salt.exceptions import CommandExecutionError
-
-# Import 3rd-party libs
-from salt.ext import six
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +62,7 @@ def __virtual__():
 
 
 def _list(query=""):
-    cmd = "port list {0}".format(query)
+    cmd = "port list {}".format(query)
     out = salt.utils.mac_utils.execute_return_result(cmd)
 
     ret = {}
@@ -173,13 +165,13 @@ def latest_version(*names, **kwargs):
 
     ret = {}
 
-    for key, val in six.iteritems(available):
+    for key, val in available.items():
         if key not in installed or salt.utils.versions.compare(
             ver1=installed[key], oper="<", ver2=val
         ):
             ret[key] = val
         else:
-            ret[key] = "{0} (installed)".format(version(key))
+            ret[key] = "{} (installed)".format(version(key))
 
     return ret
 
@@ -323,11 +315,11 @@ def install(name=None, refresh=False, pkgs=None, **kwargs):
 
         pkg_params = {name: spec}
 
-    if pkg_params is None or len(pkg_params) == 0:
+    if not pkg_params:
         return {}
 
     formulas_array = []
-    for pname, pparams in six.iteritems(pkg_params):
+    for pname, pparams in pkg_params.items():
         formulas_array.append(pname)
 
         if pparams:
@@ -381,7 +373,7 @@ def list_upgrades(refresh=True, **kwargs):  # pylint: disable=W0613
     return _list("outdated")
 
 
-def upgrade_available(pkg, refresh=True):
+def upgrade_available(pkg, refresh=True, **kwargs):
     """
     Check whether or not an upgrade is available for a given package
 
@@ -394,7 +386,7 @@ def upgrade_available(pkg, refresh=True):
     return pkg in list_upgrades(refresh=refresh)
 
 
-def refresh_db():
+def refresh_db(**kwargs):
     """
     Update ports with ``port selfupdate``
 
@@ -410,7 +402,7 @@ def refresh_db():
     return salt.utils.mac_utils.execute_return_success(cmd)
 
 
-def upgrade(refresh=True):  # pylint: disable=W0613
+def upgrade(refresh=True, **kwargs):  # pylint: disable=W0613
     """
     Run a full upgrade using MacPorts 'port upgrade outdated'
 

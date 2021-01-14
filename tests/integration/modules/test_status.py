@@ -1,21 +1,13 @@
-# -*- coding: utf-8 -*-
-
-# Import Python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
 import random
 
+import pytest
 import salt.utils.platform
-
-# Import Salt libs
-from salt.ext import six
-
-# Import Salt Testing libs
 from tests.support.case import ModuleCase
-from tests.support.helpers import flaky
+from tests.support.helpers import flaky, slowTest
 from tests.support.unit import skipIf
 
 
+@pytest.mark.windows_whitelisted
 class StatusModuleTest(ModuleCase):
     """
     Test the status module
@@ -34,6 +26,7 @@ class StatusModuleTest(ModuleCase):
         self.assertIn(random_pid, grep_salt)
 
     @skipIf(not salt.utils.platform.is_windows(), "windows only test")
+    @slowTest
     def test_status_cpuload(self):
         """
         status.cpuload
@@ -42,6 +35,7 @@ class StatusModuleTest(ModuleCase):
         self.assertTrue(isinstance(ret, float))
 
     @skipIf(not salt.utils.platform.is_windows(), "windows only test")
+    @slowTest
     def test_status_saltmem(self):
         """
         status.saltmem
@@ -49,6 +43,7 @@ class StatusModuleTest(ModuleCase):
         ret = self.run_function("status.saltmem")
         self.assertTrue(isinstance(ret, int))
 
+    @slowTest
     def test_status_diskusage(self):
         """
         status.diskusage
@@ -62,14 +57,16 @@ class StatusModuleTest(ModuleCase):
             self.assertIn("total", str(ret))
             self.assertIn("available", str(ret))
 
+    @slowTest
     def test_status_procs(self):
         """
         status.procs
         """
         ret = self.run_function("status.procs")
-        for x, y in six.iteritems(ret):
+        for x, y in ret.items():
             self.assertIn("cmd", y)
 
+    @slowTest
     def test_status_uptime(self):
         """
         status.uptime

@@ -1,16 +1,9 @@
-# -*- coding: utf-8 -*-
-
-# Import python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
 import datetime
+import logging
 import re
 
-# Import salt libs
 import salt.modules.postgres as postgres
 from salt.exceptions import SaltInvocationError
-
-# Import Salt Testing libs
 from tests.support.mixins import LoaderModuleMockMixin
 from tests.support.mock import Mock, call, patch
 from tests.support.unit import TestCase
@@ -41,6 +34,8 @@ test_privileges_list_table_csv = (
 test_privileges_list_group_csv = (
     "rolname,admin_option\n" "baruwa,f\n" "baruwatest2,t\n" "baruwatest,f\n"
 )
+
+log = logging.getLogger(__name__)
 
 
 class PostgresTestCase(TestCase, LoaderModuleMockMixin):
@@ -334,30 +329,83 @@ class PostgresTestCase(TestCase, LoaderModuleMockMixin):
                 password="foo",
                 runas="foo",
             )
-            postgres._run_psql.assert_called_once_with(
-                [
-                    "/usr/bin/pgsql",
-                    "--no-align",
-                    "--no-readline",
-                    "--no-psqlrc",
-                    "--no-password",
-                    "--username",
-                    "testuser",
-                    "--host",
-                    "testhost",
-                    "--port",
-                    "testport",
-                    "--dbname",
-                    "maint_db",
-                    "-c",
-                    'DROP DATABASE "test_db"',
-                ],
-                host="testhost",
-                user="testuser",
-                password="foo",
-                runas="foo",
-                port="testport",
+
+            calls = (
+                call(
+                    [
+                        "/usr/bin/pgsql",
+                        "--no-align",
+                        "--no-readline",
+                        "--no-psqlrc",
+                        "--no-password",
+                        "--username",
+                        "testuser",
+                        "--host",
+                        "testhost",
+                        "--port",
+                        "testport",
+                        "--dbname",
+                        "maint_db",
+                        "-c",
+                        'REVOKE CONNECT ON DATABASE "test_db" FROM public;',
+                    ],
+                    host="testhost",
+                    password="foo",
+                    port="testport",
+                    runas="foo",
+                    user="testuser",
+                ),
+                call(
+                    [
+                        "/usr/bin/pgsql",
+                        "--no-align",
+                        "--no-readline",
+                        "--no-psqlrc",
+                        "--no-password",
+                        "--username",
+                        "testuser",
+                        "--host",
+                        "testhost",
+                        "--port",
+                        "testport",
+                        "--dbname",
+                        "maint_db",
+                        "-c",
+                        "SELECT pid, pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'test_db' AND pid <> pg_backend_pid();",
+                    ],
+                    host="testhost",
+                    password="foo",
+                    port="testport",
+                    runas="foo",
+                    user="testuser",
+                ),
+                call(
+                    [
+                        "/usr/bin/pgsql",
+                        "--no-align",
+                        "--no-readline",
+                        "--no-psqlrc",
+                        "--no-password",
+                        "--username",
+                        "testuser",
+                        "--host",
+                        "testhost",
+                        "--port",
+                        "testport",
+                        "--dbname",
+                        "maint_db",
+                        "-c",
+                        'DROP DATABASE "test_db";',
+                    ],
+                    host="testhost",
+                    password="foo",
+                    port="testport",
+                    runas="foo",
+                    user="testuser",
+                ),
             )
+
+            postgres._run_psql.assert_has_calls(calls, any_order=True)
 
     def test_group_create(self):
         with patch(
@@ -499,7 +547,7 @@ class PostgresTestCase(TestCase, LoaderModuleMockMixin):
                     "PASSWORD",
                     "VALID UNTIL",
                 ):
-                    self.assertTrue(i in call, "{0} not in {1}".format(i, call))
+                    self.assertTrue(i in call, "{} not in {}".format(i, call))
 
     def test_user_exists(self):
         with patch(
@@ -1542,6 +1590,22 @@ class PostgresTestCase(TestCase, LoaderModuleMockMixin):
                 "table",
                 "ALL",
                 grant_option=True,
+                maintenance_db="db_name",
+                runas="user",
+                host="testhost",
+                port="testport",
+                user="testuser",
+                password="testpassword",
+            )
+
+            self.assertTrue(ret)
+
+            ret = postgres.has_privileges(
+                "baruwa",
+                "awl",
+                "table",
+                "ALL",
+                grant_option=False,
                 maintenance_db="db_name",
                 runas="user",
                 host="testhost",

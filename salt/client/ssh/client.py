@@ -1,23 +1,17 @@
-# -*- coding: utf-8 -*-
-
-# Import Python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
 import copy
 import logging
 import os
 import random
 
-# Import Salt libs
 import salt.config
-import salt.syspaths as syspaths
+import salt.syspaths
 import salt.utils.args
-from salt.exceptions import SaltClientError  # Temporary
+from salt.exceptions import SaltClientError
 
 log = logging.getLogger(__name__)
 
 
-class SSHClient(object):
+class SSHClient:
     """
     Create a client object for executing routines via the salt-ssh backend
 
@@ -26,7 +20,7 @@ class SSHClient(object):
 
     def __init__(
         self,
-        c_path=os.path.join(syspaths.CONFIG_DIR, "master"),
+        c_path=os.path.join(salt.syspaths.CONFIG_DIR, "master"),
         mopts=None,
         disable_custom_roster=False,
     ):
@@ -80,8 +74,7 @@ class SSHClient(object):
         .. versionadded:: 2015.5.0
         """
         ssh = self._prep_ssh(tgt, fun, arg, timeout, tgt_type, kwarg, **kwargs)
-        for ret in ssh.run_iter(jid=kwargs.get("jid", None)):
-            yield ret
+        yield from ssh.run_iter(jid=kwargs.get("jid", None))
 
     def cmd(
         self, tgt, fun, arg=(), timeout=None, tgt_type="glob", kwarg=None, **kwargs
@@ -163,7 +156,7 @@ class SSHClient(object):
         tgt_type="glob",
         ret="",
         kwarg=None,
-        sub=3,
+        subset=3,
         **kwargs
     ):
         """
@@ -172,13 +165,13 @@ class SSHClient(object):
         The function signature is the same as :py:meth:`cmd` with the
         following exceptions.
 
-        :param sub: The number of systems to execute on
+        :param subset: The number of systems to execute on
 
         .. code-block:: python
 
             >>> import salt.client.ssh.client
             >>> sshclient= salt.client.ssh.client.SSHClient()
-            >>> sshclient.cmd_subset('*', 'test.ping', sub=1)
+            >>> sshclient.cmd_subset('*', 'test.ping', subset=1)
             {'jerry': True}
 
         .. versionadded:: 2017.7.0
@@ -190,8 +183,25 @@ class SSHClient(object):
         for minion in minions:
             if fun in minion_ret[minion]["return"]:
                 f_tgt.append(minion)
-            if len(f_tgt) >= sub:
+            if len(f_tgt) >= subset:
                 break
         return self.cmd_iter(
             f_tgt, fun, arg, timeout, tgt_type="list", ret=ret, kwarg=kwarg, **kwargs
         )
+
+    def destroy(self):
+        """
+        API compatibility method with salt.client.LocalClient
+        """
+
+    def __enter__(self):
+        """
+        API compatibility method with salt.client.LocalClient
+        """
+        return self
+
+    def __exit__(self, *args):
+        """
+        API compatibility method with salt.client.LocalClient
+        """
+        self.destroy()

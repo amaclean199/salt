@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Beacon to announce via avahi (zeroconf)
 
@@ -11,16 +10,12 @@ Dependencies
 - dbus-python
 
 """
-# Import Python libs
-from __future__ import absolute_import, unicode_literals
 
 import logging
 import time
 
 import salt.utils.stringutils
-from salt.ext.six.moves import map
 
-# Import 3rd Party libs
 try:
     import avahi
 
@@ -60,12 +55,12 @@ def __virtual__():
             return __virtualname__
         return (
             False,
-            "The {0} beacon cannot be loaded. The "
+            "The {} beacon cannot be loaded. The "
             "'python-dbus' dependency is missing.".format(__virtualname__),
         )
     return (
         False,
-        "The {0} beacon cannot be loaded. The "
+        "The {} beacon cannot be loaded. The "
         "'python-avahi' dependency is missing.".format(__virtualname__),
     )
 
@@ -104,7 +99,7 @@ def _enforce_txt_record_maxlen(key, value):
              the maximum permitted length. In case of truncation, '...' is
              appended to indicate that the entire value is not present.
     """
-    # Add 1 for '=' seperator between key and value
+    # Add 1 for '=' separator between key and value
     if len(key) + len(value) + 1 > 255:
         # 255 - 3 ('...') - 1 ('=') = 251
         return value[: 251 - len(key)] + "..."

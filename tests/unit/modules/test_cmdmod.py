@@ -1,18 +1,13 @@
-# -*- coding: utf-8 -*-
 """
     :codeauthor: Nicole Thomas <nicole@saltstack.com>
 """
 
-# Import python libs
-from __future__ import absolute_import, print_function, unicode_literals
 
 import os
 import sys
 import tempfile
 
 import salt.modules.cmdmod as cmdmod
-
-# Import Salt Libs
 import salt.utils.files
 import salt.utils.platform
 import salt.utils.stringutils
@@ -20,50 +15,13 @@ from salt.exceptions import CommandExecutionError
 from salt.ext.six.moves import builtins  # pylint: disable=import-error
 from salt.log import LOG_LEVELS
 from tests.support.helpers import TstSuiteLoggingHandler
-
-# Import Salt Testing Libs
 from tests.support.mixins import LoaderModuleMockMixin
-from tests.support.mock import MagicMock, Mock, mock_open, patch
+from tests.support.mock import MagicMock, Mock, MockTimedProc, mock_open, patch
 from tests.support.runtests import RUNTIME_VARS
 from tests.support.unit import TestCase, skipIf
 
 DEFAULT_SHELL = "foo/bar"
 MOCK_SHELL_FILE = "# List of acceptable shells\n" "\n" "/bin/bash\n"
-
-
-class MockTimedProc(object):
-    """
-    Class used as a stand-in for salt.utils.timed_subprocess.TimedProc
-    """
-
-    class _Process(object):
-        """
-        Used to provide a dummy "process" attribute
-        """
-
-        def __init__(self, returncode=0, pid=12345):
-            self.returncode = returncode
-            self.pid = pid
-
-    def __init__(self, stdout=None, stderr=None, returncode=0, pid=12345):
-        if stdout is not None and not isinstance(stdout, bytes):
-            raise TypeError("Must pass stdout to MockTimedProc as bytes")
-        if stderr is not None and not isinstance(stderr, bytes):
-            raise TypeError("Must pass stderr to MockTimedProc as bytes")
-        self._stdout = stdout
-        self._stderr = stderr
-        self.process = self._Process(returncode=returncode, pid=pid)
-
-    def run(self):
-        pass
-
-    @property
-    def stdout(self):
-        return self._stdout
-
-    @property
-    def stderr(self):
-        return self._stderr
 
 
 class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
@@ -176,10 +134,17 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
         """
         with patch("salt.modules.cmdmod._is_valid_shell", MagicMock(return_value=True)):
             with patch("salt.utils.platform.is_windows", MagicMock(return_value=True)):
-                with patch.dict(cmdmod.__grains__, {"os": "fake_os"}):
-                    self.assertRaises(
-                        CommandExecutionError, cmdmod._run, "foo", "bar", runas="baz"
-                    )
+                with patch(
+                    "salt.utils.win_chcp.get_codepage_id", MagicMock(return_value=65001)
+                ):
+                    with patch.dict(cmdmod.__grains__, {"os": "fake_os"}):
+                        self.assertRaises(
+                            CommandExecutionError,
+                            cmdmod._run,
+                            "foo",
+                            "bar",
+                            runas="baz",
+                        )
 
     def test_run_user_not_available(self):
         """
@@ -260,7 +225,7 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
                             MagicMock(side_effect=OSError(expected_error)),
                         ):
                             with self.assertRaises(CommandExecutionError) as error:
-                                cmdmod.run("foo")
+                                cmdmod.run("foo", cwd="/")
                             assert error.exception.args[0].endswith(
                                 expected_error
                             ), repr(error.exception.args[0])
@@ -279,7 +244,7 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
                             MagicMock(side_effect=IOError(expected_error)),
                         ):
                             with self.assertRaises(CommandExecutionError) as error:
-                                cmdmod.run("foo")
+                                cmdmod.run("foo", cwd="/")
                             assert error.exception.args[0].endswith(
                                 expected_error
                             ), repr(error.exception.args[0])
@@ -298,6 +263,26 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
                             "stderr"
                         )
                         self.assertIn("foo", ret)
+
+    @skipIf(not salt.utils.platform.is_windows(), "Only run on Windows")
+    def test_powershell(self):
+        """
+        Tests cmd.powershell with a string value output
+        """
+        mock_run = {"pid": 1234, "retcode": 0, "stderr": "", "stdout": '"foo"'}
+        with patch("salt.modules.cmdmod._run", return_value=mock_run):
+            ret = cmdmod.powershell("Set-ExecutionPolicy RemoteSigned")
+            self.assertEqual("foo", ret)
+
+    @skipIf(not salt.utils.platform.is_windows(), "Only run on Windows")
+    def test_powershell_empty(self):
+        """
+        Tests cmd.powershell when the output is an empty string
+        """
+        mock_run = {"pid": 1234, "retcode": 0, "stderr": "", "stdout": ""}
+        with patch("salt.modules.cmdmod._run", return_value=mock_run):
+            ret = cmdmod.powershell("Set-ExecutionPolicy RemoteSigned")
+            self.assertEqual({}, ret)
 
     def test_is_valid_shell_windows(self):
         """
@@ -373,7 +358,7 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
         when bash is the default shell for the selected user
         """
 
-        class _CommandHandler(object):
+        class _CommandHandler:
             """
             Class for capturing cmd
             """
@@ -451,6 +436,21 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
             pass
         else:
             raise RuntimeError
+
+    @skipIf(salt.utils.platform.is_windows(), "Do not run on Windows")
+    @skipIf(salt.utils.platform.is_darwin(), "Do not run on MacOS")
+    def test_run_cwd_in_combination_with_runas(self):
+        """
+        cmd.run executes command in the cwd directory
+        when the runas parameter is specified
+        """
+        cmd = "pwd"
+        cwd = "/tmp"
+        runas = os.getlogin()
+
+        with patch.dict(cmdmod.__grains__, {"os": "Darwin", "os_family": "Solaris"}):
+            stdout = cmdmod._run(cmd, cwd=cwd, runas=runas).get("stdout")
+        self.assertEqual(stdout, cwd)
 
     def test_run_all_binary_replace(self):
         """
@@ -605,3 +605,38 @@ class CMDMODTestCase(TestCase, LoaderModuleMockMixin):
                 cmdmod.run_chroot("/mnt", "cmd", binds=["/var"])
                 self.assertEqual(mock_mount.call_count, 4)
                 self.assertEqual(mock_umount.call_count, 4)
+
+    @skipIf(salt.utils.platform.is_windows(), "Skip test on Windows")
+    def test_run_chroot_runas(self):
+        """
+        Test run_chroot when a runas parameter is provided
+        """
+        with patch.dict(
+            cmdmod.__salt__, {"mount.mount": MagicMock(), "mount.umount": MagicMock()}
+        ):
+            with patch("salt.modules.cmdmod.run_all") as run_all_mock:
+                cmdmod.run_chroot("/mnt", "ls", runas="foobar", shell="/bin/sh")
+        run_all_mock.assert_called_with(
+            "chroot --userspec foobar: /mnt /bin/sh -c ls",
+            bg=False,
+            clean_env=False,
+            cwd=None,
+            env=None,
+            ignore_retcode=False,
+            log_callback=None,
+            output_encoding=None,
+            output_loglevel="quiet",
+            pillar=None,
+            pillarenv=None,
+            python_shell=True,
+            reset_system_locale=True,
+            rstrip=True,
+            saltenv="base",
+            shell="/bin/sh",
+            stdin=None,
+            success_retcodes=None,
+            template=None,
+            timeout=None,
+            umask=None,
+            use_vt=False,
+        )

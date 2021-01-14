@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 The client module is used to create a client connection to the publisher
 The data structure needs to be:
@@ -9,17 +8,6 @@ The data structure needs to be:
               'key': '<read in the key file>'}
 """
 
-
-# Import salt libs
-
-# Import third party libs
-
-# pylint: disable=import-error
-
-# Try to import range from https://github.com/ytoolshed/range
-#
-# Import python libs
-from __future__ import absolute_import, print_function, unicode_literals
 
 import logging
 
@@ -40,9 +28,7 @@ from datetime import datetime
 import salt.cache
 import salt.config
 import salt.defaults.exitcodes
-
-# Import tornado
-import salt.ext.tornado.gen  # pylint: disable=F0401
+import salt.ext.tornado.gen
 import salt.loader
 import salt.payload
 import salt.syspaths as syspaths
@@ -66,7 +52,6 @@ from salt.exceptions import (
     SaltInvocationError,
     SaltReqTimeoutError,
 )
-from salt.ext import six
 
 HAS_RANGE = False
 try:
@@ -75,7 +60,6 @@ try:
     HAS_RANGE = True
 except ImportError:
     pass
-# pylint: enable=import-error
 
 
 log = logging.getLogger(__name__)
@@ -117,7 +101,7 @@ def get_local_client(
     )
 
 
-class LocalClient(object):
+class LocalClient:
     """
     The interface used by the :command:`salt` CLI tool on the Salt Master
 
@@ -205,7 +189,7 @@ class LocalClient(object):
             # The username may contain '\' if it is in Windows
             # 'DOMAIN\username' format. Fix this for the keyfile path.
             key_user = key_user.replace("\\", "_")
-        keyfile = os.path.join(self.opts["cachedir"], ".{0}_key".format(key_user))
+        keyfile = os.path.join(self.opts["cachedir"], ".{}_key".format(key_user))
         try:
             # Make sure all key parent directories are accessible
             salt.utils.verify.check_path_traversal(
@@ -213,7 +197,7 @@ class LocalClient(object):
             )
             with salt.utils.files.fopen(keyfile, "r") as key:
                 return salt.utils.stringutils.to_unicode(key.read())
-        except (OSError, IOError, SaltClientError):
+        except (OSError, SaltClientError):
             # Fall back to eauth
             return ""
 
@@ -225,7 +209,7 @@ class LocalClient(object):
         try:
             return range_.expand(tgt)
         except seco.range.RangeException as err:
-            print("Range server exception: {0}".format(err))
+            print("Range server exception: {}".format(err))
             return []
 
     def _get_timeout(self, timeout):
@@ -236,7 +220,7 @@ class LocalClient(object):
             return self.opts["timeout"]
         if isinstance(timeout, int):
             return timeout
-        if isinstance(timeout, six.string_types):
+        if isinstance(timeout, str):
             try:
                 return int(timeout)
             except ValueError:
@@ -307,9 +291,9 @@ class LocalClient(object):
             return pub_data
 
         if self.opts.get("order_masters"):
-            self.event.subscribe("syndic/.*/{0}".format(pub_data["jid"]), "regex")
+            self.event.subscribe("syndic/.*/{}".format(pub_data["jid"]), "regex")
 
-        self.event.subscribe("salt/job/{0}".format(pub_data["jid"]))
+        self.event.subscribe("salt/job/{}".format(pub_data["jid"]))
 
         return pub_data
 
@@ -360,9 +344,9 @@ class LocalClient(object):
                 "The salt master could not be contacted. Is master running?"
             )
         except AuthenticationError as err:
-            six.reraise(*sys.exc_info())
+            raise
         except AuthorizationError as err:
-            six.reraise(*sys.exc_info())
+            raise
         except Exception as general_exception:  # pylint: disable=broad-except
             # Convert to generic client error and pass along message
             raise SaltClientError(general_exception)
@@ -450,9 +434,8 @@ class LocalClient(object):
             >>> local.cmd_async('*', 'test.sleep', [300])
             '20131219215921857715'
         """
-        arg = salt.utils.args.condition_input(arg, kwarg)
         pub_data = self.run_job(
-            tgt, fun, arg, tgt_type, ret, jid=jid, listen=False, **kwargs
+            tgt, fun, arg, tgt_type, ret, jid=jid, kwarg=kwarg, listen=False, **kwargs
         )
         try:
             return pub_data["jid"]
@@ -467,7 +450,7 @@ class LocalClient(object):
         tgt_type="glob",
         ret="",
         kwarg=None,
-        sub=3,
+        subset=3,
         cli=False,
         progress=False,
         full_return=False,
@@ -479,13 +462,13 @@ class LocalClient(object):
         The function signature is the same as :py:meth:`cmd` with the
         following exceptions.
 
-        :param sub: The number of systems to execute on
+        :param subset: The number of systems to execute on
         :param cli: When this is set to True, a generator is returned,
                     otherwise a dictionary of the minion returns is returned
 
         .. code-block:: python
 
-            >>> SLC.cmd_subset('*', 'test.ping', sub=1)
+            >>> SLC.cmd_subset('*', 'test.ping', subset=1)
             {'jerry': True}
         """
         minion_ret = self.cmd(tgt, "sys.list_functions", tgt_type=tgt_type, **kwargs)
@@ -495,7 +478,7 @@ class LocalClient(object):
         for minion in minions:
             if fun in minion_ret[minion]:
                 f_tgt.append(minion)
-            if len(f_tgt) >= sub:
+            if len(f_tgt) >= subset:
                 break
         func = self.cmd
         if cli:
@@ -580,7 +563,7 @@ class LocalClient(object):
         if "token" in kwargs:
             eauth["token"] = kwargs.pop("token")
 
-        for key, val in six.iteritems(self.opts):
+        for key, val in self.opts.items():
             if key not in opts:
                 opts[key] = val
         batch = salt.cli.batch.Batch(opts, eauth=eauth, quiet=True)
@@ -703,12 +686,20 @@ class LocalClient(object):
             minion ID. A compound command will return a sub-dictionary keyed by
             function name.
         """
-        arg = salt.utils.args.condition_input(arg, kwarg)
         was_listening = self.event.cpub
 
         try:
             pub_data = self.run_job(
-                tgt, fun, arg, tgt_type, ret, timeout, jid, listen=True, **kwargs
+                tgt,
+                fun,
+                arg,
+                tgt_type,
+                ret,
+                timeout,
+                jid,
+                kwarg=kwarg,
+                listen=True,
+                **kwargs
             )
 
             if not pub_data:
@@ -725,7 +716,7 @@ class LocalClient(object):
             ):
 
                 if fn_ret:
-                    for mid, data in six.iteritems(fn_ret):
+                    for mid, data in fn_ret.items():
                         ret[mid] = data if full_return else data.get("ret", {})
 
             for failed in list(set(pub_data["minions"]) - set(ret)):
@@ -758,12 +749,19 @@ class LocalClient(object):
         :param verbose: Print extra information about the running command
         :returns: A generator
         """
-        arg = salt.utils.args.condition_input(arg, kwarg)
         was_listening = self.event.cpub
 
         try:
             self.pub_data = self.run_job(
-                tgt, fun, arg, tgt_type, ret, timeout, listen=True, **kwargs
+                tgt,
+                fun,
+                arg,
+                tgt_type,
+                ret,
+                timeout,
+                kwarg=kwarg,
+                listen=True,
+                **kwargs
             )
 
             if not self.pub_data:
@@ -832,12 +830,19 @@ class LocalClient(object):
             {'dave': {'ret': True}}
             {'stewart': {'ret': True}}
         """
-        arg = salt.utils.args.condition_input(arg, kwarg)
         was_listening = self.event.cpub
 
         try:
             pub_data = self.run_job(
-                tgt, fun, arg, tgt_type, ret, timeout, listen=True, **kwargs
+                tgt,
+                fun,
+                arg,
+                tgt_type,
+                ret,
+                timeout,
+                kwarg=kwarg,
+                listen=True,
+                **kwargs
             )
 
             if not pub_data:
@@ -896,12 +901,19 @@ class LocalClient(object):
             None
             {'stewart': {'ret': True}}
         """
-        arg = salt.utils.args.condition_input(arg, kwarg)
         was_listening = self.event.cpub
 
         try:
             pub_data = self.run_job(
-                tgt, fun, arg, tgt_type, ret, timeout, listen=True, **kwargs
+                tgt,
+                fun,
+                arg,
+                tgt_type,
+                ret,
+                timeout,
+                kwarg=kwarg,
+                listen=True,
+                **kwargs
             )
 
             if not pub_data:
@@ -941,12 +953,19 @@ class LocalClient(object):
         """
         Execute a salt command and return
         """
-        arg = salt.utils.args.condition_input(arg, kwarg)
         was_listening = self.event.cpub
 
         try:
             pub_data = self.run_job(
-                tgt, fun, arg, tgt_type, ret, timeout, listen=True, **kwargs
+                tgt,
+                fun,
+                arg,
+                tgt_type,
+                ret,
+                timeout,
+                kwarg=kwarg,
+                listen=True,
+                **kwargs
             )
 
             if not pub_data:
@@ -976,11 +995,11 @@ class LocalClient(object):
         :returns: all of the information for the JID
         """
         if verbose:
-            msg = "Executing job with jid {0}".format(jid)
+            msg = "Executing job with jid {}".format(jid)
             print(msg)
             print("-" * len(msg) + "\n")
         elif show_jid:
-            print("jid: {0}".format(jid))
+            print("jid: {}".format(jid))
         if timeout is None:
             timeout = self.opts["timeout"]
         fret = {}
@@ -1050,8 +1069,8 @@ class LocalClient(object):
         :returns: all of the information for the JID
         """
         if not isinstance(minions, set):
-            if isinstance(minions, six.string_types):
-                minions = set([minions])
+            if isinstance(minions, str):
+                minions = {minions}
             elif isinstance(minions, (list, tuple)):
                 minions = set(list(minions))
 
@@ -1070,9 +1089,7 @@ class LocalClient(object):
         # Check to see if the jid is real, if not return the empty dict
         try:
             if (
-                self.returners["{0}.get_load".format(self.opts["master_job_cache"])](
-                    jid
-                )
+                self.returners["{}.get_load".format(self.opts["master_job_cache"])](jid)
                 == {}
             ):
                 log.warning("jid does not exist")
@@ -1089,10 +1106,10 @@ class LocalClient(object):
         if self.opts["order_masters"]:
             # If we are a MoM, we need to gather expected minions from downstreams masters.
             ret_iter = self.get_returns_no_block(
-                "(salt/job|syndic/.*)/{0}".format(jid), "regex"
+                "(salt/job|syndic/.*)/{}".format(jid), "regex"
             )
         else:
-            ret_iter = self.get_returns_no_block("salt/job/{0}".format(jid))
+            ret_iter = self.get_returns_no_block("salt/job/{}".format(jid))
         # iterator for the info of this job
         jinfo_iter = []
         # open event jids that need to be un-subscribed from later
@@ -1185,7 +1202,7 @@ class LocalClient(object):
                     jinfo_iter = []
                 else:
                     jinfo_iter = self.get_returns_no_block(
-                        "salt/job/{0}".format(jinfo["jid"])
+                        "salt/job/{}".format(jinfo["jid"])
                     )
                 timeout_at = time.time() + gather_job_timeout
                 # if you are a syndic, wait a little longer
@@ -1237,7 +1254,7 @@ class LocalClient(object):
                 # if the minion throws an exception containing the word "return"
                 # the master will try to handle the string as a dict in the next
                 # step. Check if we have a string, log the issue and continue.
-                if isinstance(raw["data"]["return"], six.string_types):
+                if isinstance(raw["data"]["return"], str):
                     log.error("unexpected return from minion: %s", raw)
                     continue
 
@@ -1282,7 +1299,7 @@ class LocalClient(object):
                 self.event.unsubscribe(jid)
 
         if expect_minions:
-            for minion in list((minions - found)):
+            for minion in list(minions - found):
                 yield {minion: {"failed": True}}
 
         # Filter out any minions marked as missing for which we received
@@ -1316,17 +1333,15 @@ class LocalClient(object):
         # Check to see if the jid is real, if not return the empty dict
         try:
             if (
-                self.returners["{0}.get_load".format(self.opts["master_job_cache"])](
-                    jid
-                )
+                self.returners["{}.get_load".format(self.opts["master_job_cache"])](jid)
                 == {}
             ):
                 log.warning("jid does not exist")
                 return ret
         except Exception as exc:  # pylint: disable=broad-except
             raise SaltClientError(
-                "Master job cache returner [{0}] failed to verify jid. "
-                "Exception details: {1}".format(self.opts["master_job_cache"], exc)
+                "Master job cache returner [{}] failed to verify jid. "
+                "Exception details: {}".format(self.opts["master_job_cache"], exc)
             )
 
         # Wait for the hosts to check in
@@ -1368,13 +1383,13 @@ class LocalClient(object):
         event_iter = self.get_event_iter_returns(jid, minions, timeout=timeout)
 
         try:
-            data = self.returners["{0}.get_jid".format(self.opts["master_job_cache"])](
+            data = self.returners["{}.get_jid".format(self.opts["master_job_cache"])](
                 jid
             )
         except Exception as exc:  # pylint: disable=broad-except
             raise SaltClientError(
-                "Returner {0} could not fetch jid data. "
-                "Exception details: {1}".format(self.opts["master_job_cache"], exc)
+                "Returner {} could not fetch jid data. "
+                "Exception details: {}".format(self.opts["master_job_cache"], exc)
             )
         for minion in data:
             m_data = {}
@@ -1399,7 +1414,7 @@ class LocalClient(object):
             if event_ret == {}:
                 time.sleep(0.02)
                 continue
-            for minion, m_data in six.iteritems(event_ret):
+            for minion, m_data in event_ret.items():
                 if minion in ret:
                     ret[minion].update(m_data)
                 else:
@@ -1419,14 +1434,14 @@ class LocalClient(object):
         ret = {}
 
         try:
-            data = self.returners["{0}.get_jid".format(self.opts["master_job_cache"])](
+            data = self.returners["{}.get_jid".format(self.opts["master_job_cache"])](
                 jid
             )
         except Exception as exc:  # pylint: disable=broad-except
             raise SaltClientError(
                 "Could not examine master job cache. "
-                "Error occurred in {0} returner. "
-                "Exception details: {1}".format(self.opts["master_job_cache"], exc)
+                "Error occurred in {} returner. "
+                "Exception details: {}".format(self.opts["master_job_cache"], exc)
             )
         for minion in data:
             m_data = {}
@@ -1460,11 +1475,11 @@ class LocalClient(object):
         log.trace("entered - function get_cli_static_event_returns()")
         minions = set(minions)
         if verbose:
-            msg = "Executing job with jid {0}".format(jid)
+            msg = "Executing job with jid {}".format(jid)
             print(msg)
             print("-" * len(msg) + "\n")
         elif show_jid:
-            print("jid: {0}".format(jid))
+            print("jid: {}".format(jid))
 
         if timeout is None:
             timeout = self.opts["timeout"]
@@ -1476,9 +1491,7 @@ class LocalClient(object):
         # Check to see if the jid is real, if not return the empty dict
         try:
             if (
-                self.returners["{0}.get_load".format(self.opts["master_job_cache"])](
-                    jid
-                )
+                self.returners["{}.get_load".format(self.opts["master_job_cache"])](jid)
                 == {}
             ):
                 log.warning("jid does not exist")
@@ -1486,7 +1499,7 @@ class LocalClient(object):
         except Exception as exc:  # pylint: disable=broad-except
             raise SaltClientError(
                 "Load could not be retrieved from "
-                "returner {0}. Exception details: {1}".format(
+                "returner {}. Exception details: {}".format(
                     self.opts["master_job_cache"], exc
                 )
             )
@@ -1496,7 +1509,7 @@ class LocalClient(object):
             time_left = timeout_at - int(time.time())
             # Wait 0 == forever, use a minimum of 1s
             wait = max(1, time_left)
-            jid_tag = "salt/job/{0}".format(jid)
+            jid_tag = "salt/job/{}".format(jid)
             raw = self.event.get_event(
                 wait, jid_tag, auto_reconnect=self.auto_reconnect
             )
@@ -1556,11 +1569,11 @@ class LocalClient(object):
         log.trace("func get_cli_event_returns()")
 
         if verbose:
-            msg = "Executing job with jid {0}".format(jid)
+            msg = "Executing job with jid {}".format(jid)
             print(msg)
             print("-" * len(msg) + "\n")
         elif show_jid:
-            print("jid: {0}".format(jid))
+            print("jid: {}".format(jid))
 
         # lazy load the connected minions
         connected_minions = None
@@ -1583,14 +1596,14 @@ class LocalClient(object):
             log.debug("return event: %s", ret)
             return_count = return_count + 1
             if progress:
-                for id_, min_ret in six.iteritems(ret):
+                for id_, min_ret in ret.items():
                     if not min_ret.get("failed") is True:
                         yield {
                             "minion_count": len(minions),
                             "return_count": return_count,
                         }
             # replace the return structure for missing minions
-            for id_, min_ret in six.iteritems(ret):
+            for id_, min_ret in ret.items():
                 if min_ret.get("failed") is True:
                     if connected_minions is None:
                         connected_minions = salt.utils.minions.CkMinions(
@@ -1599,7 +1612,7 @@ class LocalClient(object):
                     if (
                         self.opts["minion_data_cache"]
                         and salt.cache.factory(self.opts).contains(
-                            "minions/{0}".format(id_), "data"
+                            "minions/{}".format(id_), "data"
                         )
                         and connected_minions
                         and id_ not in connected_minions
@@ -1620,7 +1633,12 @@ class LocalClient(object):
                             yield {
                                 id_: {
                                     "out": "no_return",
-                                    "ret": "Minion did not return. [No response]",
+                                    "ret": "Minion did not return. [No response]"
+                                    "\nThe minions may not have all finished running and any "
+                                    "remaining minions will return upon completion. To look "
+                                    "up the return data for this job later, run the following "
+                                    "command:\n\n"
+                                    "salt-run jobs.lookup_jid {}".format(jid),
                                     "retcode": salt.defaults.exitcodes.EX_GENERIC,
                                 }
                             }
@@ -1643,7 +1661,7 @@ class LocalClient(object):
         found = set()
         # Check to see if the jid is real, if not return the empty dict
         if (
-            self.returners["{0}.get_load".format(self.opts["master_job_cache"])](jid)
+            self.returners["{}.get_load".format(self.opts["master_job_cache"])](jid)
             == {}
         ):
             log.warning("jid does not exist")
@@ -1673,18 +1691,42 @@ class LocalClient(object):
             yield ret
             time.sleep(0.02)
 
+    def _resolve_nodegroup(self, ng):
+        """
+        Resolve a nodegroup into its configured components
+        """
+        if ng not in self.opts["nodegroups"]:
+            conf_file = self.opts.get("conf_file", "the master config file")
+            raise SaltInvocationError(
+                "Node group {} unavailable in {}".format(ng, conf_file)
+            )
+        return salt.utils.minions.nodegroup_comp(ng, self.opts["nodegroups"])
+
     def _prep_pub(self, tgt, fun, arg, tgt_type, ret, jid, timeout, **kwargs):
         """
         Set up the payload_kwargs to be sent down to the master
         """
         if tgt_type == "nodegroup":
-            if tgt not in self.opts["nodegroups"]:
-                conf_file = self.opts.get("conf_file", "the master config file")
-                raise SaltInvocationError(
-                    "Node group {0} unavailable in {1}".format(tgt, conf_file)
-                )
-            tgt = salt.utils.minions.nodegroup_comp(tgt, self.opts["nodegroups"])
+            tgt = self._resolve_nodegroup(tgt)
             tgt_type = "compound"
+
+        if tgt_type == "compound":
+            #  Resolve all nodegroups, so that the minions don't have to.
+            new_tgt = list()
+            log.debug("compound resolution: original tgt: %s", tgt)
+
+            if isinstance(tgt, str):
+                tgt = tgt.split()
+
+            for word in tgt:
+                if word.startswith("N@") and len(word) > 2:
+                    resolved = self._resolve_nodegroup(word[2:])
+                    new_tgt.extend(resolved)
+                else:
+                    new_tgt.append(word)
+
+            log.debug("compound resolution: new_tgt: %s", new_tgt)
+            tgt = " ".join(new_tgt)
 
         # Convert a range expression to a list of nodes and change expression
         # form to list
@@ -1695,7 +1737,7 @@ class LocalClient(object):
         # If an external job cache is specified add it to the ret list
         if self.opts.get("ext_job_cache"):
             if ret:
-                ret += ",{0}".format(self.opts["ext_job_cache"])
+                ret += ",{}".format(self.opts["ext_job_cache"])
             else:
                 ret = self.opts["ext_job_cache"]
 
@@ -1779,7 +1821,7 @@ class LocalClient(object):
 
         master_uri = "tcp://{}:{}".format(
             salt.utils.zeromq.ip_bracket(self.opts["interface"]),
-            six.text_type(self.opts["ret_port"]),
+            str(self.opts["ret_port"]),
         )
 
         with salt.transport.client.ReqChannel.factory(
@@ -1883,7 +1925,7 @@ class LocalClient(object):
             "tcp://"
             + salt.utils.zeromq.ip_bracket(self.opts["interface"])
             + ":"
-            + six.text_type(self.opts["ret_port"])
+            + str(self.opts["ret_port"])
         )
 
         with salt.transport.client.AsyncReqChannel.factory(
@@ -1940,16 +1982,25 @@ class LocalClient(object):
         # This IS really necessary!
         # When running tests, if self.events is not destroyed, we leak 2
         # threads per test case which uses self.client
-        if hasattr(self, "event"):
-            # The call below will take care of calling 'self.event.destroy()'
-            del self.event
+        self.destroy()
 
     # pylint: enable=W1701
 
     def _clean_up_subscriptions(self, job_id):
         if self.opts.get("order_masters"):
-            self.event.unsubscribe("syndic/.*/{0}".format(job_id), "regex")
-        self.event.unsubscribe("salt/job/{0}".format(job_id))
+            self.event.unsubscribe("syndic/.*/{}".format(job_id), "regex")
+        self.event.unsubscribe("salt/job/{}".format(job_id))
+
+    def destroy(self):
+        if self.event is not None:
+            self.event.destroy()
+            self.event = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.destroy()
 
 
 class FunctionWrapper(dict):
@@ -1962,7 +2013,7 @@ class FunctionWrapper(dict):
     """
 
     def __init__(self, opts, minion):
-        super(FunctionWrapper, self).__init__()
+        super().__init__()
         self.opts = opts
         self.minion = minion
         self.local = LocalClient(self.opts["conf_file"])
@@ -1997,13 +2048,13 @@ class FunctionWrapper(dict):
             """
             args = list(args)
             for _key, _val in kwargs.items():
-                args.append("{0}={1}".format(_key, _val))
+                args.append("{}={}".format(_key, _val))
             return self.local.cmd(self.minion, key, args)
 
         return func
 
 
-class Caller(object):
+class Caller:
     """
     ``Caller`` is the same interface used by the :command:`salt-call`
     command-line tool on the Salt Minion.
@@ -2081,7 +2132,7 @@ class Caller(object):
         return func(*args, **kwargs)
 
 
-class ProxyCaller(object):
+class ProxyCaller:
     """
     ``ProxyCaller`` is the same interface used by the :command:`salt-call`
     with the args ``--proxyid <proxyid>`` command-line tool on the Salt Proxy
@@ -2144,14 +2195,12 @@ class ProxyCaller(object):
         executors = getattr(self.sminion, "module_executors", []) or self.opts.get(
             "module_executors", ["direct_call"]
         )
-        if isinstance(executors, six.string_types):
+        if isinstance(executors, str):
             executors = [executors]
         for name in executors:
-            fname = "{0}.execute".format(name)
+            fname = "{}.execute".format(name)
             if fname not in self.sminion.executors:
-                raise SaltInvocationError(
-                    "Executor '{0}' is not available".format(name)
-                )
+                raise SaltInvocationError("Executor '{}' is not available".format(name))
             return_data = self.sminion.executors[fname](
                 self.opts, data, func, args, kwargs
             )

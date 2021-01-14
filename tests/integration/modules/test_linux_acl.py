@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 
-# Import python libs
 from __future__ import absolute_import, print_function, unicode_literals
 
 import os
 import shutil
 
-# Import salt libs
+import pytest
 import salt.utils.files
 import salt.utils.user
 from tests.support.case import ModuleCase
 from tests.support.helpers import skip_if_binaries_missing
 from tests.support.mixins import AdaptedConfigurationTestCaseMixin
-
-# Import Salt Testing libs
 from tests.support.runtests import RUNTIME_VARS
+from tests.support.unit import skipIf
 
 
 # Acl package should be installed to test linux_acl module
@@ -22,6 +20,7 @@ from tests.support.runtests import RUNTIME_VARS
 # Doesn't work. Why?
 # @requires_salt_modules('acl')
 # @requires_salt_modules('linux_acl')
+@pytest.mark.windows_whitelisted
 class LinuxAclModuleTest(ModuleCase, AdaptedConfigurationTestCaseMixin):
     """
     Validate the linux_acl module
@@ -56,9 +55,11 @@ class LinuxAclModuleTest(ModuleCase, AdaptedConfigurationTestCaseMixin):
         shutil.rmtree(self.mydir, ignore_errors=True)
         super(LinuxAclModuleTest, self).tearDown()
 
+    @skipIf(salt.utils.platform.is_freebsd(), "Skip on FreeBSD")
     def test_version(self):
         self.assertRegex(self.run_function("acl.version"), r"\d+\.\d+\.\d+")
 
+    @skipIf(salt.utils.platform.is_freebsd(), "Skip on FreeBSD")
     def test_getfacl_w_single_file_without_acl(self):
         ret = self.run_function("acl.getfacl", arg=[self.myfile])
         user = salt.utils.user.get_user()

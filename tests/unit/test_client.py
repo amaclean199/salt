@@ -1,14 +1,8 @@
-# -*- coding: utf-8 -*-
 """
     :codeauthor: Mike Place <mp@saltstack.com>
 """
 
-# Import python libs
-from __future__ import absolute_import, print_function, unicode_literals
-
 import salt.utils.platform
-
-# Import Salt libs
 from salt import client
 from salt.exceptions import (
     EauthAuthenticationError,
@@ -16,8 +10,7 @@ from salt.exceptions import (
     SaltInvocationError,
     SaltReqTimeoutError,
 )
-
-# Import Salt Testing libs
+from tests.support.helpers import slowTest
 from tests.support.mixins import SaltClientTestCaseMixin
 from tests.support.mock import MagicMock, patch
 from tests.support.unit import TestCase, skipIf
@@ -32,12 +25,12 @@ class LocalClientTestCase(TestCase, SaltClientTestCaseMixin):
         jid = "0815"
         raw_return = {"id": "fake-id", "jid": jid, "data": "", "return": "fake-return"}
         expected_return = {"fake-id": {"ret": "fake-return"}}
-        local_client = client.LocalClient(mopts=self.get_temp_config("master"))
-        local_client.event.get_event = MagicMock(return_value=raw_return)
-        local_client.returners = MagicMock()
-        ret = local_client.get_event_iter_returns(jid, minions)
-        val = next(ret)
-        self.assertEqual(val, expected_return)
+        with client.LocalClient(mopts=self.get_temp_config("master")) as local_client:
+            local_client.event.get_event = MagicMock(return_value=raw_return)
+            local_client.returners = MagicMock()
+            ret = local_client.get_event_iter_returns(jid, minions)
+            val = next(ret)
+            self.assertEqual(val, expected_return)
 
     def test_job_result_return_failure(self):
         """
@@ -52,21 +45,21 @@ class LocalClientTestCase(TestCase, SaltClientTestCaseMixin):
             "data": "",
             "return": "fake-return",
         }
-        local_client = client.LocalClient(mopts=self.get_temp_config("master"))
-        local_client.event.get_event = MagicMock()
-        local_client.event.get_event.side_effect = [raw_return, None]
-        local_client.returners = MagicMock()
-        ret = local_client.get_event_iter_returns(jid, minions)
-        with self.assertRaises(StopIteration):
-            next(ret)
+        with client.LocalClient(mopts=self.get_temp_config("master")) as local_client:
+            local_client.event.get_event = MagicMock()
+            local_client.event.get_event.side_effect = [raw_return, None]
+            local_client.returners = MagicMock()
+            ret = local_client.get_event_iter_returns(jid, minions)
+            with self.assertRaises(StopIteration):
+                next(ret)
 
     def test_create_local_client(self):
-        local_client = client.LocalClient(mopts=self.get_temp_config("master"))
-        self.assertIsInstance(
-            local_client,
-            client.LocalClient,
-            "LocalClient did not create a LocalClient instance",
-        )
+        with client.LocalClient(mopts=self.get_temp_config("master")) as local_client:
+            self.assertIsInstance(
+                local_client,
+                client.LocalClient,
+                "LocalClient did not create a LocalClient instance",
+            )
 
     def test_check_pub_data(self):
         just_minions = {"minions": ["m1", "m2"]}
@@ -102,7 +95,7 @@ class LocalClientTestCase(TestCase, SaltClientTestCaseMixin):
             },
         ):
             with patch("salt.client.LocalClient.cmd_cli") as cmd_cli_mock:
-                self.client.cmd_subset("*", "first.func", sub=1, cli=True)
+                self.client.cmd_subset("*", "first.func", subset=1, cli=True)
                 try:
                     cmd_cli_mock.assert_called_with(
                         ["minion2"],
@@ -125,7 +118,7 @@ class LocalClientTestCase(TestCase, SaltClientTestCaseMixin):
                         full_return=False,
                         ret="",
                     )
-                self.client.cmd_subset("*", "first.func", sub=10, cli=True)
+                self.client.cmd_subset("*", "first.func", subset=10, cli=True)
                 try:
                     cmd_cli_mock.assert_called_with(
                         ["minion2", "minion1"],
@@ -150,7 +143,7 @@ class LocalClientTestCase(TestCase, SaltClientTestCaseMixin):
                     )
 
                 ret = self.client.cmd_subset(
-                    "*", "first.func", sub=1, cli=True, full_return=True
+                    "*", "first.func", subset=1, cli=True, full_return=True
                 )
                 try:
                     cmd_cli_mock.assert_called_with(
@@ -210,6 +203,7 @@ class LocalClientTestCase(TestCase, SaltClientTestCaseMixin):
                 )
 
     @skipIf(not salt.utils.platform.is_windows(), "Windows only test")
+    @slowTest
     def test_pub_win32(self):
         """
         Tests that the client raises a timeout error when using ZeroMQ's TCP
